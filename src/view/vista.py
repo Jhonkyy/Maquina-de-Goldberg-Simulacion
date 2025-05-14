@@ -8,27 +8,11 @@ import pymunk.pygame_util
 
 from src.model.elementos import *
 
-
 # Configuración global
 GRAVEDAD = 981
 ANCHO, ALTO = 1800, 1000
 FPS = 60
 DELTA_T = 1 / FPS
-
-# Propiedades de ejemplo para dominós (puedes ajustar según tu diseño)
-PROPIEDADES_DOMINO = {
-    "num_dominoes": 10,
-    "width": 10,
-    "height": 45,
-    "mass": 0.5,
-    "friction": 0.4,
-    "elasticity": 0.4,
-    "spacing_factor": 0.4,
-    "start_x": 450,
-}
-ALTURA_MESA = ALTO - 150
-Y_SUELO = ALTURA_MESA - (PROPIEDADES_DOMINO["height"] / 2)
-Y_INICIO = ALTURA_MESA - 200
 
 def dibujar(space: pymunk.Space, window: pygame.Surface, draw_options: pymunk.pygame_util.DrawOptions) -> None:
     window.fill("white")
@@ -42,10 +26,11 @@ def main(window: pygame.Surface, width: int, height: int) -> None:
     space = pymunk.Space()
     space.gravity = (0, GRAVEDAD)
     space.damping = 0.99
+    space.iterations = 60  # <-- Aumenta las iteraciones del solver
     draw_options = pymunk.pygame_util.DrawOptions(window)
 
     # 1. Bola 1 (azul) desde arriba
-    bola1 = crear_bola(space, radius=15, mass=0.2, position=(120, 60))
+    bola1 = crear_bola(space, radius=15, mass=3, position=(120, 60))
 
     # 2. Rampas R1-R5 (ajusta posiciones según tu boceto)
     crear_rampa(space, (70, 150), (150, 200))   # R1
@@ -67,11 +52,11 @@ def main(window: pygame.Surface, width: int, height: int) -> None:
     import math
     # Definir los puntos clave de la trayectoria
     recipiente_pos = (650, 400)
-    primer_punto_arco = (750, 155)
+    primer_punto_arco = (700, 200)  # <-- Cambia este punto para acortar la cuerda
     cx, cy, r = 680, 150, 25
     ang_inicio = math.atan2(primer_punto_arco[0] - cy, primer_punto_arco[0] - cx)
     ang_fin = math.radians(360)
-    punto_palanca = (950, 120)
+    punto_palanca = (800, 250)  # <-- Cambia este punto para acortar la cuerda
 
     # Trayectoria: recipiente → primer_punto_arco → arco sobre polea → palanca
     trayecto = []
@@ -105,17 +90,18 @@ def main(window: pygame.Surface, width: int, height: int) -> None:
         puntos.append(trayecto[-1])
         return [(int(x), int(y)) for x, y in puntos]
 
-    puntos_cuerda1 = interpola_trayecto(trayecto, distancia_max=10)
+    # Puedes aumentar distancia_max para menos puntos (más separados)
+    puntos_cuerda1 = interpola_trayecto(trayecto, distancia_max=15)
     cuerda1 = crear_cuerda(space, puntos_cuerda1, radio=3)
 
     # Crear el recipiente (dinámico, animado)
     recipiente_pos = (650, 400)
     recipiente_size = (150, 30)
     recipiente_mass = 2
-    recipiente_body = pymunk.Body(recipiente_mass, pymunk.moment_for_box(recipiente_mass, recipiente_size))
+    recipiente_body = pymunk.Body(recipiente_mass, float('inf'))  # <-- Evita rotación
     recipiente_body.position = recipiente_pos
     recipiente_shape = pymunk.Poly.create_box(recipiente_body, recipiente_size)
-    recipiente_shape.friction = 0.7
+    recipiente_shape.friction = 100
     recipiente_shape.elasticity = 0.2
     space.add(recipiente_body, recipiente_shape)
 
@@ -128,14 +114,14 @@ def main(window: pygame.Surface, width: int, height: int) -> None:
     groove = pymunk.GrooveJoint(
         space.static_body,
         recipiente_body,
-        (recipiente_pos[0], recipiente_pos[1] - 200),
         (recipiente_pos[0], recipiente_pos[1] + 200),
+        (recipiente_pos[0], recipiente_pos[1] + 400),
         (0, 0)
     )
     space.add(groove)
 
     # 5. Bola 2 (azul) sobre palanca
-    bola2 = crear_bola(space, radius=15, mass=0.1, position=(1090, 120))
+    bola2 = crear_bola(space, radius=15, mass=0.1, position=(840, 120))
 
     # 6. Palanca animada (línea café, pivote fijo en punto amarillo)
     # Cambia el orden de pivote y extremo para que la palanca quede orientada correctamente
@@ -169,17 +155,17 @@ def main(window: pygame.Surface, width: int, height: int) -> None:
     crear_rampa(space, (1780, 700), (1128, 760))  # R12
 
     # 10. Polea 2 (verde)
-    crear_polea(space, position=(250, 650), radius=25)
+    # crear_polea(space, position=(250, 650), radius=25)
 
     # 11. Cuerda 2 (realista, segmentos)
     # puntos_cuerda2 = [(500, 350), (400, 500), (350, 600)]
     # cuerda2 = crear_cuerda(space, puntos_cuerda2, radio=3)
 
     # 12. Elevador (rectángulo azul)
-    elevador = crear_elevador(space, position=(300, 600), size=(80, 20))
+    # elevador = crear_elevador(space, position=(300, 600), size=(80, 20))
 
     # 13. Peso pentágono rojo (dinámico)
-    pentagono = crear_pentagono(space, position=(430, 890), size=20)
+    pentagono = crear_pentagono(space, position=(450, 890), size=20)
 
     # 14. Rampa R13 (carrito)
     crear_rampa(space, (1060, 850), (400, 905))   # R13
