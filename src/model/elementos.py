@@ -154,7 +154,7 @@ def crear_carrito(space: pymunk.Space, position: Tuple[float, float], size: Tupl
     body = pymunk.Body(mass, pymunk.moment_for_box(mass, size))
     body.position = position
     shape = pymunk.Poly.create_box(body, size)
-    shape.friction = 0.7
+    shape.friction = 0.12
     shape.elasticity = 0.2
     space.add(body, shape)
     return body
@@ -214,7 +214,7 @@ def crear_pentagono(space: pymunk.Space, position: Tuple[float, float], size: fl
     body = pymunk.Body(mass, pymunk.moment_for_poly(mass, points))
     body.position = position
     shape = pymunk.Poly(body, points)
-    shape.friction = 0.7
+    shape.friction = 0.14
     shape.elasticity = 0.2
     space.add(body, shape)
     return body
@@ -226,7 +226,7 @@ def crear_palanca_animada(space: pymunk.Space, pivote: Tuple[float, float], extr
     body = pymunk.Body(mass, moment)
     body.position = ((pivote[0] + extremo[0]) / 2, (pivote[1] + extremo[1]) / 2)
     shape = pymunk.Poly.create_box(body, (length, thickness))
-    shape.friction = 0.7
+    shape.friction = 5
     shape.elasticity = 0.2
     # Pivote fijo
     static_body = pymunk.Body(body_type=pymunk.Body.STATIC)

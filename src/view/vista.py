@@ -59,46 +59,59 @@ def main(window: pygame.Surface, width: int, height: int) -> None:
     polea1_body = pymunk.Body(body_type=pymunk.Body.STATIC)
     polea1_body.position = (680, 150)
     polea1_shape = pymunk.Circle(polea1_body, 25)
-    polea1_shape.friction = 0.5
-    polea1_shape.elasticity = 0.2
+    polea1_shape.friction = 3
+    polea1_shape.elasticity = 0
     space.add(polea1_body, polea1_shape)
 
-    # 4. Cuerda 1 (más puntos entre el recipiente y la polea, pero sin hacerla más larga)
+    # 4. Cuerda 1 (muchos puntos equidistantes a lo largo del trayecto real)
     import math
-    # Interpolación densa entre el recipiente y el primer punto antes del arco
+    # Definir los puntos clave de la trayectoria
     recipiente_pos = (650, 400)
     primer_punto_arco = (750, 155)
-    num_puntos_interp = 15  # Más puntos para suavidad
-    puntos_cuerda1 = []
-    for i in range(num_puntos_interp + 1):
-        t = i / num_puntos_interp
-        x = int(recipiente_pos[0] + (primer_punto_arco[0] - recipiente_pos[0]) * t)
-        y = int(recipiente_pos[1] + (primer_punto_arco[1] - recipiente_pos[1]) * t)
-        puntos_cuerda1.append((x, y))
-    # Enganchar a la polea (arco por ARRIBA)
     cx, cy, r = 680, 150, 25
-    ang_inicio = math.radians(360)
-    ang_fin = math.radians(0)
-    num_puntos_arco = 12
+    ang_inicio = math.atan2(primer_punto_arco[0] - cy, primer_punto_arco[0] - cx)
+    ang_fin = math.radians(360)
+    punto_palanca = (950, 120)
+
+    # Trayectoria: recipiente → primer_punto_arco → arco sobre polea → palanca
+    trayecto = []
+    trayecto.append(recipiente_pos)
+    trayecto.append(primer_punto_arco)
+    # Arco sobre la polea (de primer_punto_arco hasta el punto más a la derecha de la polea)
+    num_puntos_arco = 5
     for i in range(num_puntos_arco + 1):
         ang = ang_inicio + (ang_fin - ang_inicio) * (i / num_puntos_arco)
-        x = int(cx + r * math.cos(ang))
-        y = int(cy - r * math.sin(ang))
-        puntos_cuerda1.append((x, y))
-    puntos_cuerda1 += [
-        (700, 140),
-        (750, 130),
-        (800, 125),
-        (850, 123),
-        (900, 122),
-        (950, 120),
-    ]
+        x = cx + r * math.cos(ang)
+        y = cy + r * math.sin(ang)
+        trayecto.append((x, y))
+    # Desde el final del arco hasta la palanca
+    trayecto.append(punto_palanca)
+
+    # Ahora, interpola muchos puntos a lo largo de todo el trayecto, con distancia máxima entre puntos (ej: 10 px)
+    def interpola_trayecto(trayecto, distancia_max=10):
+        puntos = []
+        for i in range(len(trayecto) - 1):
+            x0, y0 = trayecto[i]
+            x1, y1 = trayecto[i+1]
+            dx = x1 - x0
+            dy = y1 - y0
+            dist = math.hypot(dx, dy)
+            pasos = max(1, int(dist // distancia_max))
+            for j in range(pasos):
+                t = j / pasos
+                x = x0 + dx * t
+                y = y0 + dy * t
+                puntos.append((x, y))
+        puntos.append(trayecto[-1])
+        return [(int(x), int(y)) for x, y in puntos]
+
+    puntos_cuerda1 = interpola_trayecto(trayecto, distancia_max=10)
     cuerda1 = crear_cuerda(space, puntos_cuerda1, radio=3)
 
     # Crear el recipiente (dinámico, animado)
     recipiente_pos = (650, 400)
     recipiente_size = (150, 30)
-    recipiente_mass = 1.5
+    recipiente_mass = 2
     recipiente_body = pymunk.Body(recipiente_mass, pymunk.moment_for_box(recipiente_mass, recipiente_size))
     recipiente_body.position = recipiente_pos
     recipiente_shape = pymunk.Poly.create_box(recipiente_body, recipiente_size)
@@ -122,18 +135,22 @@ def main(window: pygame.Surface, width: int, height: int) -> None:
     space.add(groove)
 
     # 5. Bola 2 (azul) sobre palanca
-    bola2 = crear_bola(space, radius=15, mass=0.2, position=(820, 120))
+    bola2 = crear_bola(space, radius=15, mass=0.1, position=(1090, 120))
 
     # 6. Palanca animada (línea café, pivote fijo en punto amarillo)
-    pivote = (750, 220)
-    extremo = (950, 120)
-    palanca = crear_palanca_animada(space, pivote=pivote, extremo=extremo, thickness=8, mass=1.0)
+    # Cambia el orden de pivote y extremo para que la palanca quede orientada correctamente
+    pivote = (1050, 120)
+    extremo = (850, 220)
+    palanca = crear_palanca_animada(space, pivote=pivote, extremo=extremo, thickness=8, mass=1)
 
     # Enganchar el último segmento de la cuerda a un extremo de la palanca
     if cuerda1:
-        # Calcula la posición local del extremo respecto al centro de la palanca
+        # El cuerpo de la palanca está centrado en el punto medio entre pivote y extremo
+        # El extremo móvil local es la mitad del vector desde pivote al extremo, pero hay que considerar el sentido
+        # Para que el enganche sea justo en el extremo visible, calcula:
         palanca_pos = palanca.position
-        local_extremo = (extremo[0] - palanca_pos[0], extremo[1] - palanca_pos[1])
+        # Vector del centro de la palanca al extremo (en el sistema local de la palanca)
+        local_extremo = (extremo[0] - (pivote[0] + extremo[0]) / 2, extremo[1] - (pivote[1] + extremo[1]) / 2)
         joint_cuerda_palanca = pymunk.PinJoint(cuerda1[-1], palanca, (0,0), local_extremo)
         space.add(joint_cuerda_palanca)
 
@@ -141,38 +158,38 @@ def main(window: pygame.Surface, width: int, height: int) -> None:
     # crear_rampa(space, (820, 120), (950, 120), thickness=8)  # R15
 
     # # 8. Rampas R6-R11 (zigzag)
-    # crear_rampa(space, (950, 120), (980, 170))   # R6
-    # crear_rampa(space, (980, 170), (950, 200))   # R7
-    # crear_rampa(space, (950, 200), (980, 230))   # R8
-    # crear_rampa(space, (980, 230), (950, 260))   # R9
-    # crear_rampa(space, (950, 260), (1050, 280))  # R10
-    # crear_rampa(space, (1050, 280), (1150, 300)) # R11
+    crear_rampa(space, (1050, 200), (1100, 300)) # R6
+    crear_rampa(space, (1200, 200), (1150, 300))   # R7
+    crear_rampa(space, (1050, 320), (1120, 420))   # R8
+    crear_rampa(space, (1200, 400), (1150, 500))   # R9
+    crear_rampa(space, (1050, 500), (1120, 600))  # R10
+    crear_rampa(space, (1120, 600), (1600, 603)) # R11
 
     # 9. Rampa R12 (larga)
-    # crear_rampa(space, (1150, 300), (900, 400))  # R12
+    crear_rampa(space, (1780, 700), (1128, 760))  # R12
 
     # 10. Polea 2 (verde)
-    crear_polea(space, position=(70, 750), radius=25)
+    crear_polea(space, position=(250, 650), radius=25)
 
     # 11. Cuerda 2 (realista, segmentos)
-    puntos_cuerda2 = [(500, 350), (400, 500), (350, 600)]
-    cuerda2 = crear_cuerda(space, puntos_cuerda2, radio=3)
+    # puntos_cuerda2 = [(500, 350), (400, 500), (350, 600)]
+    # cuerda2 = crear_cuerda(space, puntos_cuerda2, radio=3)
 
     # 12. Elevador (rectángulo azul)
     elevador = crear_elevador(space, position=(300, 600), size=(80, 20))
 
     # 13. Peso pentágono rojo (dinámico)
-    pentagono = crear_pentagono(space, position=(400, 650), size=20)
+    pentagono = crear_pentagono(space, position=(430, 890), size=20)
 
     # 14. Rampa R13 (carrito)
-    crear_rampa(space, (500, 700), (700, 720))   # R13
+    crear_rampa(space, (1060, 850), (400, 905))   # R13
 
     # 15. Carrito (morado con ruedas)
-    carrito = crear_carrito(space, position=(520, 690), size=(60, 30))
+    carrito = crear_carrito(space, position=(975, 850), size=(60, 30))
     # Ruedas del carrito (puedes crear bolas pequeñas y unirlas con joints si quieres más realismo)
 
     # 16. Rampa R14 (debajo del elevador)
-    crear_rampa(space, (250, 650), (350, 650))   # R14
+    # crear_rampa(space, (250, 650), (350, 650))   # R14
 
     # Límites
     crear_limites(space, width, height)
